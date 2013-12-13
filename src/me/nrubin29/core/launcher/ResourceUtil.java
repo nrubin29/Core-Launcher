@@ -1,4 +1,4 @@
-package me.nrubin29.rpg.launcher;
+package me.nrubin29.core.launcher;
 
 import java.awt.image.BufferedImage;
 import java.io.InputStream;

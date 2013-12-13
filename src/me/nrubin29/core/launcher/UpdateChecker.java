@@ -1,4 +1,4 @@
-package me.nrubin29.rpg.launcher;
+package me.nrubin29.core.launcher;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -16,9 +16,9 @@ public class UpdateChecker {
 
 	private boolean done = false, gameExists = false;
 	
-	public UpdateChecker(Launcher l) {
+	public UpdateChecker(Launcher l, boolean force) {
 		boolean shouldUpdate = false;
-		l.write("Beginning launcher update check. Current version is " + Launcher.VERSION);
+		l.write("Beginning launcher update check. Force is " + force + ". Current version is " + Launcher.VERSION);
 		
 		l.write("Getting launcher version information from server.");
 		
@@ -130,7 +130,7 @@ public class UpdateChecker {
 			}
 		}
 		
-		if (shouldUpdate) {
+		if (shouldUpdate || force) {
 			l.write("Done checks. Beginning game update.");
 			
 			try {
@@ -177,6 +177,7 @@ public class UpdateChecker {
 		else {
 			l.write("Not going to update game.");
 			done = true;
+			gameExists = true;
 		}
 	}
 	

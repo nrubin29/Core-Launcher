@@ -1,4 +1,4 @@
-package me.nrubin29.rpg.launcher;
+package me.nrubin29.core.launcher;
 
 import java.awt.Component;
 import java.awt.Dimension;
@@ -9,6 +9,7 @@ import java.io.File;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.security.MessageDigest;
 import java.util.Date;
 
 import javax.swing.BoxLayout;
@@ -17,59 +18,47 @@ import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
+import javax.swing.JPasswordField;
 import javax.swing.JScrollPane;
 import javax.swing.JTextArea;
 import javax.swing.JTextField;
+import javax.swing.JTextPane;
 import javax.swing.filechooser.FileSystemView;
 
 public class Launcher extends JFrame {
 
 	private static final long serialVersionUID = 1L;
 	
-	public static final String VERSION = "1.2";
+	public static final String
+			NAME = "Core",
+			VERSION = "1.2.3";
 	
 	private JTextArea log = new JTextArea();
-	JTextField name = new JTextField();
+	JTextField userName = new JTextField();
+	JPasswordField password = new JPasswordField();
 	
 	private UpdateChecker checker;
 	
 	public Launcher() {
-		super("RPG-Core Launcher");
+		super("Core Launcher");
 		
 		write("Loading...");
 		
 		JLabel logo = new JLabel(ResourceUtil.getImage("logo"));
 		logo.setAlignmentX(Component.CENTER_ALIGNMENT);
 		
-		final JTextArea news = new JTextArea("Loading news...");
+		final JTextPane news = new JTextPane();
+		news.setText("Loading news...");
 		news.setEditable(false);
 		
 		new Thread(new Runnable() {
 			public void run() {
-				try {
-					URL url = new URL("http://rpg-core.comule.com/game/news.html");
-			        HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-			        BufferedReader in = new BufferedReader(new InputStreamReader(conn.getInputStream()));
-			        
-			        news.setText("");
-			        
-			        while (in.ready()) {
-			        	String line = in.readLine();
-			        	
-			        	if (line.startsWith("<!--")) break;
-			        	
-			        	news.append(line + "\n");
-			        }
-			        
-			        in.close();
-				}
+				try { news.setPage("http://rpg-core.comule.com/game/news.html"); }
 				catch (Exception e) { news.setText("Could not load news."); }
 			}
 		}).start();
 		
 		log.setEditable(false);
-		
-		name = new JTextField();
 		
 		JButton play = new JButton("Play");
 		play.addActionListener(new ActionListener() {
@@ -84,14 +73,65 @@ public class Launcher extends JFrame {
 					return;
 				}
 				
+				if (userName.getText().equals("")) {
+					JOptionPane.showMessageDialog(Launcher.this, "You didn't enter a username.");
+					return;
+				}
+				
+				if (new String(password.getPassword()).equals("")) {
+					JOptionPane.showMessageDialog(Launcher.this, "You didn't enter a password.");
+					return;
+				}
+				
+				boolean correctLogin = false;
+				
 				try {
-					Process p = new ProcessBuilder("java", "-jar", getFile("game.jar").getPath(), name.getText()).start();
-					setProcess(p);
+					write("Connecting to server to verify credentials.");
+					
+					URL url = new URL("http://rpg-core.comule.com/game/users.html");
+			        HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+			        BufferedReader in = new BufferedReader(new InputStreamReader(conn.getInputStream()));
+			        
+			        while (in.ready()) {
+			        	String[] strs = in.readLine().split(" ");
+			        	
+			        	if (strs[0].equals(userName.getText()) && strs[1].equals(stringToSHA256(new String(password.getPassword())))) {
+			        		correctLogin = true;
+			        		break;
+			        	}
+			        }
+			        
+			        in.close();
+			        
+			        if (correctLogin) {
+			        	write("Credentials accepted. Launching.");
+			        	
+			        	try {
+							Process p = new ProcessBuilder("java", "-jar", getFile("game.jar").getPath(), userName.getText()).start();
+							setProcess(p);
+						}
+						catch (Exception ex) {
+							write("Could not launch game.");
+							ex.printStackTrace();
+						}
+			        }
+			        
+			        else {
+			        	JOptionPane.showMessageDialog(Launcher.this, "Incorrect username or password.");
+						return;
+			        }
 				}
 				catch (Exception ex) {
-					write("Could not launch game.");
-					ex.printStackTrace();
+					JOptionPane.showMessageDialog(Launcher.this, "Could not verify credentials. Make sure you are connected to the internet.");
 				}
+			}
+		});
+		
+		JButton force = new JButton("Force Update");
+		force.addActionListener(new ActionListener() {
+			public void actionPerformed(ActionEvent e) {
+				if (!checker.isDone()) return;
+				checker = new UpdateChecker(Launcher.this, true);
 			}
 		});
 		
@@ -103,9 +143,12 @@ public class Launcher extends JFrame {
 		JPanel bottomPanel = new JPanel();
 		bottomPanel.setLayout(new BoxLayout(bottomPanel, BoxLayout.X_AXIS));
 		bottomPanel.setMaximumSize(new Dimension(800, 40));
-		bottomPanel.add(new JLabel(" Name: "));
-		bottomPanel.add(name);
+		bottomPanel.add(new JLabel(" Username: "));
+		bottomPanel.add(userName);
+		bottomPanel.add(new JLabel(" Password: "));
+		bottomPanel.add(password);
 		bottomPanel.add(play);
+		bottomPanel.add(force);
 		
 		add(logo);
 		add(new JLabel("v" + VERSION));
@@ -121,7 +164,7 @@ public class Launcher extends JFrame {
         
         write("Done!");
         
-        checker = new UpdateChecker(this);
+        checker = new UpdateChecker(this, false);
 	}
 	
 	void write(String str) {
@@ -157,14 +200,14 @@ public class Launcher extends JFrame {
 		}).start();
 	}
 	
-	File getFile(String name) {
+	public File getRootFolder() {
 		String homedir = FileSystemView.getFileSystemView().getHomeDirectory().getAbsolutePath();
 		String osname = System.getProperty("os.name").toLowerCase();
 		File rootFolder;
 			
-		if (osname.startsWith("mac")) rootFolder = new File(homedir + "/Library/Application Support/RPG-Core");
-		else if (osname.startsWith("linux")) rootFolder = new File(homedir + "/.RPG-Core/");
-		else if (osname.startsWith("win")) rootFolder = new File(System.getenv("APPDATA") + "\\.RPG-Core\\");
+		if (osname.startsWith("mac")) rootFolder = new File(homedir + "/Library/Application Support/" + NAME);
+		else if (osname.startsWith("linux")) rootFolder = new File(homedir + "/." +  NAME + "/");
+		else if (osname.startsWith("win")) rootFolder = new File(System.getenv("APPDATA") + "\\." + NAME + "\\");
 		else throw new RuntimeException("Unsupported OS: " + osname);
 
         if (!rootFolder.exists()) {
@@ -176,11 +219,34 @@ public class Launcher extends JFrame {
 
             if (!success) write("Could not create folder.");
         }
+        
+        return rootFolder;
+	}
+	
+	public File getFile(String name) {
+		File rootFolder = getRootFolder();
 		
 		File f = new File(rootFolder, name);
 		
 		return f;
 	}
+	
+	private String stringToSHA256(String base) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] hash = digest.digest(base.getBytes("UTF-8"));
+            StringBuffer hexString = new StringBuffer();
+
+            for (int i = 0; i < hash.length; i++) {
+                String hex = Integer.toHexString(0xff & hash[i]);
+                if (hex.length() == 1) hexString.append('0');
+                hexString.append(hex);
+            }
+
+            return hexString.toString();
+        }
+        catch (Exception ex) { ex.printStackTrace(); return null; }
+    }
 	
 	public static void main(String[] args) {
         new Launcher();

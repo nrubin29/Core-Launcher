@@ -26,6 +26,8 @@ public class Launcher extends JFrame {
 
 	private static final long serialVersionUID = 1L;
 	
+	public static final String VERSION = "1.2";
+	
 	private JTextArea log = new JTextArea();
 	JTextField name = new JTextField();
 	
@@ -45,7 +47,7 @@ public class Launcher extends JFrame {
 		new Thread(new Runnable() {
 			public void run() {
 				try {
-					URL url = new URL("http://rpg-core.comule.com/news/news.html");
+					URL url = new URL("http://rpg-core.comule.com/game/news.html");
 			        HttpURLConnection conn = (HttpURLConnection) url.openConnection();
 			        BufferedReader in = new BufferedReader(new InputStreamReader(conn.getInputStream()));
 			        
@@ -106,6 +108,7 @@ public class Launcher extends JFrame {
 		bottomPanel.add(play);
 		
 		add(logo);
+		add(new JLabel("v" + VERSION));
 		add(textPanel);
 		add(bottomPanel);
 		

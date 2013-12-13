@@ -6,18 +6,16 @@ import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.io.BufferedReader;
 import java.io.File;
-import java.io.FileOutputStream;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URL;
-import java.nio.channels.Channels;
-import java.nio.channels.ReadableByteChannel;
 import java.util.Date;
 
 import javax.swing.BoxLayout;
 import javax.swing.JButton;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
+import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTextArea;
@@ -29,6 +27,9 @@ public class Launcher extends JFrame {
 	private static final long serialVersionUID = 1L;
 	
 	private JTextArea log = new JTextArea();
+	JTextField name = new JTextField();
+	
+	private UpdateChecker checker;
 	
 	public Launcher() {
 		super("RPG-Core Launcher");
@@ -66,50 +67,29 @@ public class Launcher extends JFrame {
 		
 		log.setEditable(false);
 		
-		final JTextField name = new JTextField();
+		name = new JTextField();
 		
 		JButton play = new JButton("Play");
 		play.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent e) {
-				write("Downloading game...");
+				if (!checker.isDone()) {
+					JOptionPane.showMessageDialog(Launcher.this, "Update checker still running.");
+					return;
+				}
+				
+				if (!checker.gameExists()) {
+					JOptionPane.showMessageDialog(Launcher.this, "It appears the game isn't installed. Try restarting the launcher with an internet connection.");
+					return;
+				}
 				
 				try {
-					File game = getFile("game.jar");
-					
-					try {
-						URL url = new URL("http://rpg-core.comule.com/game/game.jar");
-					    ReadableByteChannel rbc = Channels.newChannel(url.openStream());
-					    FileOutputStream fos = new FileOutputStream(game);
-					    fos.getChannel().transferFrom(rbc, 0, Long.MAX_VALUE);
-					    fos.close();
-					}
-					catch (Exception ex) {
-						write("Could not download game.");
-						ex.printStackTrace();
-						
-						if (game.exists()) {
-							write("Found existing copy; launching.");
-							
-							Process p = new ProcessBuilder("java", "-jar", game.getPath(), name.getText()).start();
-							
-							setProcess(p);
-							
-							return;
-						}
-						else {
-							write("No existing copy. Relaunch with an internet connection.");
-							
-							return;
-						}
-					}
-				    
-				    write("Done. Launching...");
-					
-					Process p = new ProcessBuilder("java", "-jar", game.getPath(), name.getText()).start();
-					
+					Process p = new ProcessBuilder("java", "-jar", getFile("game.jar").getPath(), name.getText()).start();
 					setProcess(p);
 				}
-				catch (Exception ex) { ex.printStackTrace(); }
+				catch (Exception ex) {
+					write("Could not launch game.");
+					ex.printStackTrace();
+				}
 			}
 		});
 		
@@ -137,13 +117,15 @@ public class Launcher extends JFrame {
         setVisible(true);
         
         write("Done!");
+        
+        checker = new UpdateChecker(this);
 	}
 	
-	private void write(String str) {
+	void write(String str) {
 		log.append("[" + new Date() + "] " + str + "\n");
 	}
 	
-	private void setProcess(Process process) {
+	void setProcess(Process process) {
 		final BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
 		final BufferedReader errorReader = new BufferedReader(new InputStreamReader(process.getErrorStream()));
 		
@@ -172,7 +154,7 @@ public class Launcher extends JFrame {
 		}).start();
 	}
 	
-	private final File getFile(String name) {
+	File getFile(String name) {
 		String homedir = FileSystemView.getFileSystemView().getHomeDirectory().getAbsolutePath();
 		String osname = System.getProperty("os.name").toLowerCase();
 		File rootFolder;
